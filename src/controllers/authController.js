@@ -10,10 +10,7 @@ async function signup(req, res, next) {
       password.length < 8 ||
       !user_name?.trim()
     )
-      return failure(
-        res,
-        "Password of at least 8 characters is required",
-      );
+      return failure(res, "Password of at least 8 characters is required");
     return success(
       res,
       await authService.signup({
