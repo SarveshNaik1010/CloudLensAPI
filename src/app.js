@@ -2,6 +2,11 @@ require("dotenv").config();
 const express = require("express");
 const { failure } = require("./helpers/responseHelper");
 const app = express();
+
+const cors = require("cors");
+
+app.use(cors());
+
 app.use(express.json({ limit: "100kb" }));
 app.get("/health", (req, res) =>
   res.json({ success: true, data: { status: "ok" } }),
@@ -11,6 +16,8 @@ app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/cloud-connections", require("./routes/cloudConnectionRoutes"));
 app.use("/api/aws", require("./routes/awsRoutes"));
 app.use("/api/azure", require("./routes/azureRoutes"));
+app.use("/api/gcp", require("./routes/gcpRoutes"));
+app.use("/api/dashboard", require("./routes/dashboardRoutes"));
 app.use((req, res) => failure(res, "Route not found", 404));
 app.use((error, req, res, next) => {
   if (error.code === "23505")

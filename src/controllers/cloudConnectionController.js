@@ -17,15 +17,20 @@ function validAzureCredentials(c) {
     typeof c.subscriptionId === "string"
   );
 }
+function validGcpCredentials(c) {
+  return c && typeof c.projectId === "string" &&
+    ((typeof c.clientEmail === "string" && typeof c.privateKey === "string") ||
+      (c.serviceAccountKey && typeof c.serviceAccountKey === "object"));
+}
 async function create(req, res, next) {
   try {
     const { provider, connection_name, credentials } = req.body;
     if (
-      !["AWS", "AZURE"].includes(provider) ||
+      !["AWS", "AZURE", "GCP"].includes(provider) ||
       !connection_name?.trim() ||
       !(provider === "AWS"
         ? validCredentials(credentials)
-        : validAzureCredentials(credentials))
+        : provider === "AZURE" ? validAzureCredentials(credentials) : validGcpCredentials(credentials))
     )
       return failure(
         res,
@@ -59,9 +64,10 @@ async function update(req, res, next) {
     if (
       req.body.credentials &&
       !validCredentials(req.body.credentials) &&
-      !validAzureCredentials(req.body.credentials)
+      !validAzureCredentials(req.body.credentials) &&
+      !validGcpCredentials(req.body.credentials)
     )
-      return failure(res, "credentials must contain valid AWS or Azure fields");
+      return failure(res, "credentials must contain valid AWS, Azure, or GCP fields");
     return success(
       res,
       await service.update(req.user.user_id, req.params.connectionId, req.body),

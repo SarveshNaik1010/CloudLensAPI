@@ -2,6 +2,7 @@ const supabase = require("../config/supabase");
 const { GetCallerIdentityCommand } = require("@aws-sdk/client-sts");
 const { createAwsClients } = require("../config/aws");
 const { createAzureClients } = require("../config/azure");
+const { createGcpClients } = require("../config/gcp");
 const { encrypt, decrypt } = require("../helpers/credentialsHelper");
 
 const publicConnection = ({ credentials, ...connection }) => connection;
@@ -18,11 +19,16 @@ async function verifyAzure(credentials) {
   ).subscriptions.subscriptions.get(credentials.subscriptionId);
   return subscription.subscriptionId || credentials.subscriptionId;
 }
+async function verifyGcp(credentials) {
+  const { compute } = createGcpClients(credentials);
+  const result = await compute.projects.get({ project: credentials.projectId });
+  return result.data.projectId || credentials.projectId;
+}
 async function create(userId, input) {
   const accountId =
     input.provider === "AWS"
       ? await verifyAws(input.credentials)
-      : await verifyAzure(input.credentials);
+      : input.provider === "AZURE" ? await verifyAzure(input.credentials) : await verifyGcp(input.credentials);
   if (input.provider_account_id && input.provider_account_id !== accountId) {
     const error = new Error(
       "provider_account_id does not match the supplied cloud credentials",
@@ -84,7 +90,7 @@ async function update(userId, connectionId, input) {
     const account =
       existing.provider === "AWS"
         ? await verifyAws(input.credentials)
-        : await verifyAzure(input.credentials);
+        : existing.provider === "AZURE" ? await verifyAzure(input.credentials) : await verifyGcp(input.credentials);
     changes.credentials = encrypt(input.credentials);
     changes.provider_account_id = account;
   }
@@ -163,6 +169,28 @@ async function activeAzureCredentials(userId, connectionId) {
   }
   return connection;
 }
+async function activeGcpCredentials(userId, connectionId) {
+  let connection;
+  if (connectionId) connection = await get(userId, connectionId, true);
+  else {
+    const { data, error } = await supabase.from("cloud_connections").select("*")
+      .eq("user_id", userId).eq("provider", "GCP").eq("status", "ACTIVE")
+      .is("deleted_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
+    connection = data && { ...data, credentials: decrypt(data.credentials) };
+  }
+  if (!connection || connection.provider !== "GCP" || connection.status !== "ACTIVE") {
+    const error = new Error("An active GCP connection is required"); error.status = 400; throw error;
+  }
+  return connection;
+}
+async function activeConnections(userId) {
+  const { data, error } = await supabase.from("cloud_connections").select("*")
+    .eq("user_id", userId).eq("status", "ACTIVE").is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.map((connection) => ({ ...connection, credentials: decrypt(connection.credentials) }));
+}
 module.exports = {
   create,
   list,
@@ -171,4 +199,6 @@ module.exports = {
   remove,
   activeAwsCredentials,
   activeAzureCredentials,
+  activeGcpCredentials,
+  activeConnections,
 };

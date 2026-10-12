@@ -15,12 +15,11 @@ The goal of the platform is to:
 
 This backend currently focuses on:
 
-1. User Authentication
-2. User Management
-3. AWS Cloud Connection Management
-4. AWS Resource Discovery
-5. AWS Utilization Monitoring
-6. AWS Cost Estimation
+1. User Authentication and Management
+2. AWS, Azure, and GCP Cloud Connection Management
+3. Cloud Resource Discovery
+4. Cloud Utilization Monitoring
+5. Cloud Cost Estimation
 
 All APIs must return JSON responses.
 
@@ -33,6 +32,7 @@ All APIs must return JSON responses.
 * Supabase (PostgreSQL)
 * JWT Authentication
 * AWS SDK v3
+* Google APIs client
 * MVC Architecture
 
 ---
@@ -124,6 +124,33 @@ Middleware should:
 * Validate JWT
 * Extract user_id
 * Attach user object to request
+
+---
+
+# GCP APIs
+
+Create a GCP cloud connection with provider `GCP` and a service account key. Credentials may be passed as a full `serviceAccountKey` JSON object, or as `projectId`, `clientEmail`, and `privateKey` fields. The service account needs project access to Compute Engine, Cloud Storage, Cloud SQL, Cloud Monitoring, and Cloud Billing Catalog APIs for the corresponding endpoints.
+
+All GCP endpoints require a JWT. Pass `x-cloud-connection-id` to select a specific connection; otherwise the newest active GCP connection is used.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/gcp/resources` | Combined Compute Engine, Cloud Storage, and Cloud SQL inventory |
+| GET | `/api/gcp/vms` | Compute Engine instances |
+| GET | `/api/gcp/vms/:instanceId` | Instance details; accepts instance ID or name |
+| GET | `/api/gcp/storage` | Storage buckets |
+| GET | `/api/gcp/storage/:bucketName` | Bucket configuration |
+| GET | `/api/gcp/databases` | Cloud SQL instances |
+| GET | `/api/gcp/databases/:instanceName` | Cloud SQL instance details |
+| GET | `/api/gcp/metrics/vm/:instanceId` | Compute Engine metrics |
+| GET | `/api/gcp/metrics/storage/:bucketName` | Cloud Storage metrics |
+| GET | `/api/gcp/metrics/database/:instanceName` | Cloud SQL metrics |
+| GET | `/api/gcp/pricing/vms` | Compute Engine monthly cost estimates |
+| GET | `/api/gcp/pricing/storage` | Storage monthly cost estimates |
+| GET | `/api/gcp/pricing/databases` | Cloud SQL monthly cost estimates |
+| GET | `/api/gcp/dashboard` | Resource totals and estimated VM costs |
+
+Pricing responses are estimates and exclude usage charges such as network egress and operations where noted.
 
 ---
 
@@ -343,6 +370,37 @@ AWS credentials are stored in:
   "region": ""
 }
 ```
+
+# Unified Dashboard API
+
+All dashboard routes require a JWT. They aggregate resources from every active
+connection owned by the authenticated user. Provider request failures are
+reported in the response data while successful providers continue to appear.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/dashboard/summary` | Active resource count and explicit availability states for cost, savings, and forecast |
+| GET | `/api/dashboard/resources` | Normalized, filtered, paginated multi-cloud inventory |
+| GET | `/api/dashboard/cost-by-resource-type` | Category cost response; amounts are null until billing integrations exist |
+| GET | `/api/dashboard/cost-comparison` | Monthly cost series response; periods are empty until billing integrations exist |
+| GET | `/api/dashboard/filters` | Available inventory filter values |
+| GET | `/api/dashboard/forecast` | Explicit unsupported response until billing history/provider forecasts exist |
+| GET | `/api/dashboard/savings` | Explicit unsupported response until provider recommendations exist |
+
+Inventory accepts `page`, `pageSize` (maximum 100), `provider`, `accountId`,
+`category`, `resourceType`, `region`, `status`, and `tag`. Successful resource
+items share `resourceId`, `resourceName`, `provider`, `accountId`,
+`resourceType`, `category`, `region`, `availabilityZone`, `status`, `createdAt`,
+`cost`, `currency`, `utilization`, `tags`, and `metadata`. Unknown values are
+`null`. Cost and utilization are not inferred from pricing estimates or
+monitoring data; corresponding normalized fields remain null until connected to
+real per-resource data.
+
+Existing `/api/{aws,azure,gcp}/pricing/*` endpoints remain estimates for their
+documented resource types. They are not billing actuals and are not included in
+dashboard spend aggregates. Dashboard cost, forecast, and savings values report
+unsupported/null states because the current integrations do not retrieve
+normalized billing history or recommendations.
 
 AWS SDK v3 must be used.
 

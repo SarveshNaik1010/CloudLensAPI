@@ -1,0 +1,12 @@
+const router = require("express").Router();
+const controller = require("../controllers/dashboardController");
+const { authenticate } = require("../middleware/authMiddleware");
+router.use(authenticate);
+router.get("/summary", controller.summary);
+router.get("/resources", controller.resources);
+router.get("/cost-by-resource-type", controller.categoryCosts);
+router.get("/cost-comparison", controller.comparison);
+router.get("/filters", controller.filters);
+router.get("/forecast", (_req, res) => res.json({ success: true, data: { value: null, supported: false, reason: "No billing history or provider forecast integration is available." } }));
+router.get("/savings", (_req, res) => res.json({ success: true, data: { value: null, supported: false, reason: "No provider recommendation integrations are available." } }));
+module.exports = router;
